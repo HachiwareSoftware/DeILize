@@ -66,6 +66,8 @@
     <Compile Include="Runtime\AssemblyRuntimePatcher.cs" />
     <Compile Include="Runtime\LdrModuleHider.cs" />
     <Compile Include="Runtime\HarmonyAssemblyLoadHooks.cs" />
+    <Compile Include="Runtime\ByteArrayAssemblyPatcher.cs" />
+    <Compile Include="Runtime\EtwEventFilter.cs" />
     <Compile Include="FilePatch\FileAssemblyPatcher.cs" />
     <Compile Include="FilePatch\EmbeddedResourcePatcher.cs" />
     <Compile Include="FilePatch\AssemblyIdentityRewriter.cs" />
@@ -74,6 +76,7 @@
     <Compile Include="Models\AssemblyRenameConfig.cs" />
     <Compile Include="Models\RuntimePatchResult.cs" />
     <Compile Include="Native\NativeMethods.cs" />
+    <Compile Include="Logger.cs" />
     <Compile Include="DeILizeRuntime.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

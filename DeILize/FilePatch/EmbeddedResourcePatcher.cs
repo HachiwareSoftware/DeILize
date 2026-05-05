@@ -13,72 +13,58 @@ namespace DeILize.FilePatch
         internal static void Process(ModuleDefinition module, FilePatchOptions options)
         {
             var resources = module.Resources.OfType<EmbeddedResource>().ToList();
+            Logger.Debug($"Total embedded resources: {resources.Count}");
+            if (resources.Count == 0) { Logger.Info("No embedded resources to process"); return; }
+
+            int peCount = 0, costuraCount = 0, patched = 0;
 
             foreach (var resource in resources)
             {
                 byte[] data = resource.GetResourceData();
+                Logger.Debug($"Resource: '{resource.Name}' ({data.Length} bytes)");
 
-                if (IsPeImage(data))
-                {
-                    if (options.Destructive)
-                    {
-                        PeHeaderPatcher.PatchBytes(data);
-                        ReplaceResource(module, resource, data);
-                    }
-                }
+                bool isPe = data.Length >= 2 && data[0] == 0x4D && data[1] == 0x5A;
+                bool isCostura = resource.Name.IndexOf("costura", StringComparison.OrdinalIgnoreCase) >= 0
+                              && resource.Name.EndsWith(".compressed", StringComparison.OrdinalIgnoreCase);
 
-                if (IsCosturaCompressed(resource.Name))
+                if (isPe) peCount++;
+                if (isCostura) costuraCount++;
+
+                if (isCostura)
                 {
-                    byte[] decompressed = DecompressDeflate(data);
-                    if (IsPeImage(decompressed))
+                    Logger.Debug("Costura compressed resource detected, decompressing...");
+                    byte[] decompressed;
+                    using (var input = new MemoryStream(data))
+                    using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
+                    using (var output = new MemoryStream()) { deflate.CopyTo(output); decompressed = output.ToArray(); }
+                    Logger.Debug($"Decompressed: {data.Length} -> {decompressed.Length} bytes");
+
+                    if (decompressed.Length >= 2 && decompressed[0] == 0x4D && decompressed[1] == 0x5A)
                     {
-                        if (options.Destructive)
+                        if (options.Destructive) PeHeaderPatcher.PatchBytes(decompressed);
+                        using (var output = new MemoryStream())
                         {
-                            PeHeaderPatcher.PatchBytes(decompressed);
+                            using (var deflate = new DeflateStream(output, CompressionMode.Compress))
+                                deflate.Write(decompressed, 0, decompressed.Length);
+                            data = output.ToArray();
                         }
-
-                        byte[] recompressed = CompressDeflate(decompressed);
-                        ReplaceResource(module, resource, recompressed);
+                        ReplaceResource(module, resource, data);
+                        patched++;
+                        Logger.Info($"Costura resource '{resource.Name}' patched");
                     }
+                    else Logger.Warn("Decompressed content is not a PE image, skipping");
                 }
-            }
-        }
-
-        private static bool IsPeImage(byte[] data)
-        {
-            if (data == null || data.Length < 2)
-                return false;
-
-            return data[0] == 0x4D && data[1] == 0x5A;
-        }
-
-        private static bool IsCosturaCompressed(string resourceName)
-        {
-            return resourceName.IndexOf("costura", StringComparison.OrdinalIgnoreCase) >= 0
-                && resourceName.EndsWith(".compressed", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static byte[] DecompressDeflate(byte[] compressedData)
-        {
-            using (var input = new MemoryStream(compressedData))
-            using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
-            using (var output = new MemoryStream())
-            {
-                deflate.CopyTo(output);
-                return output.ToArray();
-            }
-        }
-
-        private static byte[] CompressDeflate(byte[] data)
-        {
-            using (var output = new MemoryStream())
-            {
-                using (var deflate = new DeflateStream(output, CompressionMode.Compress))
+                else if (isPe && options.Destructive)
                 {
-                    deflate.Write(data, 0, data.Length);
+                    PeHeaderPatcher.PatchBytes(data);
+                    ReplaceResource(module, resource, data);
+                    patched++;
+                    Logger.Info($"Embedded PE resource '{resource.Name}' patched");
                 }
-                return output.ToArray();
             }
+
+            Logger.Debug($"PE resources: {peCount}, Costura: {costuraCount}, Patched: {patched}");
+            Logger.Info("Embedded resource processing complete");
         }
 
         private static void ReplaceResource(ModuleDefinition module, EmbeddedResource oldResource, byte[] newData)

@@ -12,14 +12,17 @@ namespace DeILize.Runtime
     {
         internal static IReadOnlyList<RuntimePatchResult> PatchAll(RuntimePatchOptions options)
         {
-            var results = new List<RuntimePatchResult>();
+            Logger.Section("Runtime Patch All Assemblies");
+            Logger.Debug("Enumerating loaded assemblies...");
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            Logger.Info($"Found {assemblies.Length} loaded assemblies");
 
+            var results = new List<RuntimePatchResult>();
             foreach (var assembly in assemblies)
-            {
                 results.Add(TryPatch(assembly, options));
-            }
 
+            int ok = results.Count(r => r.ClrDirectoryZeroed);
+            Logger.Info($"{ok}/{results.Count} assemblies patched");
             return results;
         }
 
@@ -31,54 +34,50 @@ namespace DeILize.Runtime
                 Location = assembly.Location
             };
 
+            Logger.Section($"Patch Assembly: {result.AssemblyName}");
+
             try
             {
                 if (assembly.IsDynamic)
-                {
-                    result.Warning = "Dynamic assembly, cannot patch";
-                    return result;
-                }
+                { Logger.Warn("Dynamic assembly, skipping"); result.Warning = "Dynamic assembly"; return result; }
 
                 if (string.IsNullOrEmpty(assembly.Location))
-                {
-                    result.Warning = "No location (loaded from bytes)";
-                    return result;
-                }
+                { Logger.Warn("No location (loaded from bytes), skipping"); result.Warning = "No location"; return result; }
+
+                Logger.Debug($"Location: {assembly.Location}");
 
                 IntPtr moduleBase = Marshal.GetHINSTANCE(assembly.ManifestModule);
-                if (moduleBase == IntPtr.Zero || moduleBase == (IntPtr)(-1))
-                {
-                    moduleBase = FindModuleBaseByPath(assembly.Location);
-                }
+                Logger.Debug($"GetHINSTANCE: 0x{moduleBase:X}");
 
                 if (moduleBase == IntPtr.Zero || moduleBase == (IntPtr)(-1))
                 {
-                    result.Warning = "Could not resolve module base address";
-                    return result;
+                    Logger.Debug("GetHINSTANCE failed, trying ProcessModule lookup");
+                    moduleBase = FindModuleBaseByPath(assembly.Location);
+                    Logger.Debug($"ProcessModule lookup: 0x{moduleBase:X}");
                 }
+
+                if (moduleBase == IntPtr.Zero || moduleBase == (IntPtr)(-1))
+                { Logger.Error("Could not resolve module base"); result.Warning = "No module base"; return result; }
+
+                Logger.Info($"Module base: 0x{moduleBase:X}");
 
                 bool clrPatched = PeHeaderPatcher.ZeroClrDirectory(moduleBase);
                 result.ClrDirectoryZeroed = clrPatched;
 
                 if (options.HideAssemblyDebugInfo)
-                {
-                    bool debugPatched = PeHeaderPatcher.ZeroDebugDirectory(moduleBase);
-                    result.DebugDirectoryZeroed = debugPatched;
-                }
+                    result.DebugDirectoryZeroed = PeHeaderPatcher.ZeroDebugDirectory(moduleBase);
 
                 if (options.HideModuleFromPeb)
-                {
-                    bool pebUnlinked = LdrModuleHider.Unlink(moduleBase);
-                    result.PebUnlinked = pebUnlinked;
-                }
+                    result.PebUnlinked = LdrModuleHider.Unlink(moduleBase);
 
                 if (!clrPatched)
-                {
-                    result.Warning = "CLR directory zeroing failed";
-                }
+                { result.Warning = "CLR zeroing failed"; Logger.Error("CLR directory zeroing failed"); }
+                else
+                    Logger.Info("Assembly patched");
             }
             catch (Exception ex)
             {
+                Logger.Error($"{ex.GetType().Name}: {ex.Message}");
                 result.Warning = $"Exception: {ex.Message}";
             }
 
@@ -87,26 +86,14 @@ namespace DeILize.Runtime
 
         private static IntPtr FindModuleBaseByPath(string assemblyPath)
         {
-            if (string.IsNullOrEmpty(assemblyPath))
-                return IntPtr.Zero;
-
             try
             {
                 using (var process = Process.GetCurrentProcess())
-                {
-                    foreach (ProcessModule module in process.Modules)
-                    {
-                        if (string.Equals(module.FileName, assemblyPath, StringComparison.OrdinalIgnoreCase))
-                        {
-                            return module.BaseAddress;
-                        }
-                    }
-                }
+                    foreach (ProcessModule m in process.Modules)
+                        if (string.Equals(m.FileName, assemblyPath, StringComparison.OrdinalIgnoreCase))
+                        { Logger.Debug($"Found module: {m.ModuleName} @ 0x{m.BaseAddress:X}"); return m.BaseAddress; }
             }
-            catch
-            {
-            }
-
+            catch (Exception ex) { Logger.Warn($"Process module enum failed: {ex.Message}"); }
             return IntPtr.Zero;
         }
     }

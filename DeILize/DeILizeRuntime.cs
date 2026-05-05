@@ -13,7 +13,18 @@ namespace DeILize
             if (options == null)
                 options = new RuntimePatchOptions();
 
-            return AssemblyRuntimePatcher.PatchAll(options);
+            try
+            {
+                if (options.SuppressEtwEvents)
+                    EtwEventFilter.Install();
+
+                return AssemblyRuntimePatcher.PatchAll(options);
+            }
+            finally
+            {
+                if (options.SuppressEtwEvents)
+                    EtwEventFilter.Uninstall();
+            }
         }
 
         public static void InstallHooks(RuntimePatchOptions options = null)
@@ -21,11 +32,22 @@ namespace DeILize
             if (options == null)
                 options = new RuntimePatchOptions();
 
-            HarmonyAssemblyLoadHooks.Install(options);
-
-            if (options.PatchAlreadyLoadedAssemblies)
+            try
             {
-                AssemblyRuntimePatcher.PatchAll(options);
+                if (options.SuppressEtwEvents)
+                    EtwEventFilter.Install();
+
+                HarmonyAssemblyLoadHooks.Install(options);
+
+                if (options.PatchAlreadyLoadedAssemblies)
+                {
+                    AssemblyRuntimePatcher.PatchAll(options);
+                }
+            }
+            finally
+            {
+                if (options.SuppressEtwEvents)
+                    EtwEventFilter.Uninstall();
             }
         }
 

@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.CommandLine;
+using System.CommandLine.Invocation;
 using System.IO;
-using System.Linq;
 using DeILize.FilePatch;
 using DeILize.Models;
 
@@ -9,225 +9,224 @@ namespace DeILize.CLI
 {
     internal class Program
     {
-        static void Main(string[] args)
+        static int Main(string[] args)
         {
-            if (args.Length == 0)
-            {
-                PrintUsage();
-                return;
-            }
+            var rootCommand = new RootCommand("DeILize - Remove IL-related information from .NET assemblies");
 
-            string command = args[0].ToLowerInvariant();
+            var patchCommand = new Command("patch", "Patch a .NET assembly file");
+            var renameCommand = new Command("rename-assembly", "Rename an assembly identity");
+            var inspectCommand = new Command("inspect", "Inspect a .NET assembly");
 
-            switch (command)
-            {
-                case "patch-file":
-                    RunPatchFile(args.Skip(1).ToArray());
-                    break;
-                case "rename-assembly":
-                    RunRenameAssembly(args.Skip(1).ToArray());
-                    break;
-                case "inspect":
-                    RunInspect(args.Skip(1).ToArray());
-                    break;
-                default:
-                    Console.WriteLine($"Unknown command: {command}");
-                    PrintUsage();
-                    break;
-            }
+            SetupPatchCommand(patchCommand);
+            SetupRenameCommand(renameCommand);
+            SetupInspectCommand(inspectCommand);
+
+            rootCommand.AddCommand(patchCommand);
+            rootCommand.AddCommand(renameCommand);
+            rootCommand.AddCommand(inspectCommand);
+
+            return rootCommand.Invoke(args);
         }
 
-        static void PrintUsage()
+        static void SetupPatchCommand(Command cmd)
         {
-            Console.WriteLine("DeILize - Remove IL-related information from .NET assemblies");
-            Console.WriteLine();
-            Console.WriteLine("Usage:");
-            Console.WriteLine("  DeILize.CLI patch-file <input> <output> [options]");
-            Console.WriteLine("  DeILize.CLI rename-assembly <input> <output> --name <new-name>");
-            Console.WriteLine("  DeILize.CLI inspect <input>");
-            Console.WriteLine();
-            Console.WriteLine("patch-file options:");
-            Console.WriteLine("  --destructive       Zero CLR data directory (output may not load)");
-            Console.WriteLine("  --strip-debug       Strip debug information (default: true)");
-            Console.WriteLine("  --rename <old>=<new> Rename assembly reference");
-            Console.WriteLine("  --no-strip-debug    Keep debug information");
-            Console.WriteLine("  --no-attributes     Keep assembly attributes");
-        }
+            var inputArg = new Argument<string>("input", "Path to input assembly");
+            var outputArg = new Argument<string>("output", () => null, "Path to output assembly (default: <input>.patched.dll)");
+            var verboseOpt = new Option<bool>("--verbose", "Show detailed debug output");
+            var destructiveOpt = new Option<bool>("--destructive", "Zero CLR data directory (output may not load)");
+            var stripDebugOpt = new Option<bool>("--strip-debug", () => true, "Strip debug information");
+            var noStripDebugOpt = new Option<bool>("--no-strip-debug", "Keep debug information");
+            var noAttributesOpt = new Option<bool>("--no-attributes", "Keep assembly attributes");
+            var renameOpt = new Option<string>("--rename", "Rename assembly reference (format: old=new)");
 
-        static void RunPatchFile(string[] args)
-        {
-            var options = new FilePatchOptions();
-            string inputPath = null;
-            string outputPath = null;
-            var positionalArgs = new List<string>();
+            cmd.AddArgument(inputArg);
+            cmd.AddArgument(outputArg);
+            cmd.AddOption(verboseOpt);
+            cmd.AddOption(destructiveOpt);
+            cmd.AddOption(stripDebugOpt);
+            cmd.AddOption(noStripDebugOpt);
+            cmd.AddOption(noAttributesOpt);
+            cmd.AddOption(renameOpt);
 
-            for (int i = 0; i < args.Length; i++)
+            cmd.SetHandler((InvocationContext ctx) =>
             {
-                switch (args[i].ToLowerInvariant())
+                var options = new FilePatchOptions();
+                string inputPath = ctx.ParseResult.GetValueForArgument(inputArg);
+                string outputPath = ctx.ParseResult.GetValueForArgument(outputArg);
+                bool verbose = ctx.ParseResult.GetValueForOption(verboseOpt);
+                bool destructive = ctx.ParseResult.GetValueForOption(destructiveOpt);
+                bool stripDebug = ctx.ParseResult.GetValueForOption(stripDebugOpt);
+                bool noStripDebug = ctx.ParseResult.GetValueForOption(noStripDebugOpt);
+                bool noAttributes = ctx.ParseResult.GetValueForOption(noAttributesOpt);
+                string rename = ctx.ParseResult.GetValueForOption(renameOpt);
+
+                if (verbose)
                 {
-                    case "--destructive":
-                        options.Destructive = true;
-                        break;
-                    case "--strip-debug":
-                        options.StripDebugInfo = true;
-                        break;
-                    case "--no-strip-debug":
-                        options.StripDebugInfo = false;
-                        break;
-                    case "--no-attributes":
-                        options.RemoveAssemblyAttributes = false;
-                        break;
-                    default:
-                        if (args[i].StartsWith("--rename="))
+                    Logger.LogEvent += (level, msg) =>
+                    {
+                        switch (level)
                         {
-                            var renamePart = args[i].Substring("--rename=".Length);
-                            var parts = renamePart.Split('=');
-                            if (parts.Length == 2)
-                            {
-                                options.Rename = new AssemblyRenameConfig
-                                {
-                                    NewAssemblyName = parts[1]
-                                };
-                            }
+                            case "section": Console.WriteLine(); Console.WriteLine(msg); break;
+                            case "info":    Console.WriteLine($"[+] {msg}"); break;
+                            case "warn":    Console.WriteLine($"[!] {msg}"); break;
+                            case "error":   Console.WriteLine($"[-] {msg}"); break;
+                            case "debug":   Console.WriteLine($"[>] {msg}"); break;
                         }
-                        else
-                        {
-                            positionalArgs.Add(args[i]);
-                        }
-                        break;
+                    };
                 }
-            }
 
-            if (positionalArgs.Count < 2)
-            {
-                Console.WriteLine("Error: input and output paths required");
-                return;
-            }
+                options.Destructive = destructive;
+                options.StripDebugInfo = noStripDebug ? false : stripDebug;
+                options.RemoveAssemblyAttributes = !noAttributes;
 
-            inputPath = positionalArgs[0];
-            outputPath = positionalArgs[1];
-
-            if (!File.Exists(inputPath))
-            {
-                Console.WriteLine($"Error: input file not found: {inputPath}");
-                return;
-            }
-
-            try
-            {
-                bool success = DeILizeRuntime.PatchAssemblyFile(inputPath, outputPath, options);
-                Console.WriteLine(success ? "Patched successfully" : "Patch failed");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-            }
-        }
-
-        static void RunRenameAssembly(string[] args)
-        {
-            if (args.Length < 3 || args[0] == "--help")
-            {
-                Console.WriteLine("Usage: DeILize.CLI rename-assembly <input> <output> --name <new-name>");
-                return;
-            }
-
-            string inputPath = args[0];
-            string outputPath = args[1];
-            string newName = null;
-
-            for (int i = 2; i < args.Length; i++)
-            {
-                if (args[i] == "--name" && i + 1 < args.Length)
+                if (!string.IsNullOrEmpty(rename))
                 {
-                    newName = args[i + 1];
-                    i++;
+                    var parts = rename.Split('=');
+                    if (parts.Length == 2)
+                    {
+                        options.Rename = new AssemblyRenameConfig
+                        {
+                            NewAssemblyName = parts[1]
+                        };
+                    }
                 }
-            }
 
-            if (string.IsNullOrEmpty(newName))
-            {
-                Console.WriteLine("Error: --name is required");
-                return;
-            }
+                if (string.IsNullOrEmpty(outputPath))
+                    outputPath = Path.ChangeExtension(inputPath, null) + ".patched.dll";
 
-            if (!File.Exists(inputPath))
-            {
-                Console.WriteLine($"Error: input file not found: {inputPath}");
-                return;
-            }
+                if (!File.Exists(inputPath))
+                {
+                    Console.WriteLine($"Error: input file not found: {inputPath}");
+                    ctx.ExitCode = 1;
+                    return;
+                }
 
-            try
-            {
-                AssemblyIdentityRewriter.RewriteFile(inputPath, outputPath,
-                    new AssemblyRenameConfig { NewAssemblyName = newName });
-                Console.WriteLine($"Renamed assembly to '{newName}'");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error: {ex.Message}");
-            }
+                Console.WriteLine($"[INFO] Input:  {inputPath}");
+                Console.WriteLine($"[INFO] Output: {outputPath}");
+                Console.WriteLine($"[INFO] Destructive: {options.Destructive}");
+                Console.WriteLine($"[INFO] Strip debug: {options.StripDebugInfo}");
+                Console.WriteLine($"[INFO] Remove attrs: {options.RemoveAssemblyAttributes}");
+                Console.WriteLine($"[INFO] Patch embedded: {options.PatchEmbeddedResources}");
+
+                try
+                {
+                    bool success = DeILizeRuntime.PatchAssemblyFile(inputPath, outputPath, options);
+                    Console.WriteLine(success ? "Patched successfully" : "Patch failed");
+                    ctx.ExitCode = success ? 0 : 1;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    ctx.ExitCode = 1;
+                }
+            });
         }
 
-        static void RunInspect(string[] args)
+        static void SetupRenameCommand(Command cmd)
         {
-            if (args.Length == 0)
+            var inputArg = new Argument<string>("input", "Path to input assembly");
+            var outputArg = new Argument<string>("output", "Path to output assembly");
+            var nameOpt = new Option<string>("--name", "New assembly name") { IsRequired = true };
+
+            cmd.AddArgument(inputArg);
+            cmd.AddArgument(outputArg);
+            cmd.AddOption(nameOpt);
+
+            cmd.SetHandler((InvocationContext ctx) =>
             {
-                Console.WriteLine("Usage: DeILize.CLI inspect <input>");
-                return;
-            }
+                string inputPath = ctx.ParseResult.GetValueForArgument(inputArg);
+                string outputPath = ctx.ParseResult.GetValueForArgument(outputArg);
+                string newName = ctx.ParseResult.GetValueForOption(nameOpt);
 
-            string inputPath = args[0];
+                if (!File.Exists(inputPath))
+                {
+                    Console.WriteLine($"Error: input file not found: {inputPath}");
+                    ctx.ExitCode = 1;
+                    return;
+                }
 
-            if (!File.Exists(inputPath))
+                Console.WriteLine($"[INFO] Renaming assembly: {inputPath} -> {outputPath}, new name: {newName}");
+
+                try
+                {
+                    AssemblyIdentityRewriter.RewriteFile(inputPath, outputPath,
+                        new AssemblyRenameConfig { NewAssemblyName = newName });
+                    Console.WriteLine($"Renamed assembly to '{newName}'");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                    ctx.ExitCode = 1;
+                }
+            });
+        }
+
+        static void SetupInspectCommand(Command cmd)
+        {
+            var inputArg = new Argument<string>("input", "Path to assembly to inspect");
+
+            cmd.AddArgument(inputArg);
+
+            cmd.SetHandler((InvocationContext ctx) =>
             {
-                Console.WriteLine($"Error: file not found: {inputPath}");
-                return;
-            }
+                string inputPath = ctx.ParseResult.GetValueForArgument(inputArg);
 
-            byte[] peBytes = File.ReadAllBytes(inputPath);
+                if (!File.Exists(inputPath))
+                {
+                    Console.WriteLine($"Error: file not found: {inputPath}");
+                    ctx.ExitCode = 1;
+                    return;
+                }
 
-            if (peBytes.Length < 2 || peBytes[0] != 0x4D || peBytes[1] != 0x5A)
-            {
-                Console.WriteLine("Not a valid PE image");
-                return;
-            }
+                Console.WriteLine($"[INFO] Inspecting: {inputPath}");
 
-            int e_lfanew = System.BitConverter.ToInt32(peBytes, 0x3C);
-            if (e_lfanew < 0 || e_lfanew + 4 > peBytes.Length)
-            {
-                Console.WriteLine("Invalid PE header offset");
-                return;
-            }
+                byte[] peBytes = File.ReadAllBytes(inputPath);
 
-            uint ntSig = (uint)System.BitConverter.ToInt32(peBytes, e_lfanew);
-            if (ntSig != 0x00004550)
-            {
-                Console.WriteLine("No NT signature");
-                return;
-            }
+                if (peBytes.Length < 2 || peBytes[0] != 0x4D || peBytes[1] != 0x5A)
+                {
+                    Console.WriteLine("Not a valid PE image");
+                    ctx.ExitCode = 1;
+                    return;
+                }
 
-            int fileHeaderOff = e_lfanew + 4;
-            int optionalHeaderOff = fileHeaderOff + 20;
+                int e_lfanew = BitConverter.ToInt32(peBytes, 0x3C);
+                if (e_lfanew < 0 || e_lfanew + 4 > peBytes.Length)
+                {
+                    Console.WriteLine("Invalid PE header offset");
+                    ctx.ExitCode = 1;
+                    return;
+                }
 
-            ushort magic = (ushort)(peBytes[optionalHeaderOff] | (peBytes[optionalHeaderOff + 1] << 8));
-            string peType = magic == 0x10B ? "PE32" : magic == 0x20B ? "PE32+" : "Unknown";
-            Console.WriteLine($"PE Type: {peType}");
+                uint ntSig = (uint)BitConverter.ToInt32(peBytes, e_lfanew);
+                if (ntSig != 0x00004550)
+                {
+                    Console.WriteLine("No NT signature");
+                    ctx.ExitCode = 1;
+                    return;
+                }
 
-            int dataDirOff = magic == 0x10B ? optionalHeaderOff + 96 : optionalHeaderOff + 112;
+                int fileHeaderOff = e_lfanew + 4;
+                int optionalHeaderOff = fileHeaderOff + 20;
 
-            int clrEntryOff = dataDirOff + 14 * 8;
-            int clrRva = System.BitConverter.ToInt32(peBytes, clrEntryOff);
-            int clrSize = System.BitConverter.ToInt32(peBytes, clrEntryOff + 4);
-            Console.WriteLine($"CLR Data Directory: RVA=0x{clrRva:X8}, Size=0x{clrSize:X8}");
-            Console.WriteLine($"CLR Directory Present: {(clrRva != 0 && clrSize != 0)}");
+                ushort magic = (ushort)(peBytes[optionalHeaderOff] | (peBytes[optionalHeaderOff + 1] << 8));
+                string peType = magic == 0x10B ? "PE32" : magic == 0x20B ? "PE32+" : "Unknown";
+                Console.WriteLine($"PE Type: {peType}");
 
-            int debugEntryOff = dataDirOff + 6 * 8;
-            int debugRva = System.BitConverter.ToInt32(peBytes, debugEntryOff);
-            int debugSize = System.BitConverter.ToInt32(peBytes, debugEntryOff + 4);
-            Console.WriteLine($"Debug Directory: RVA=0x{debugRva:X8}, Size=0x{debugSize:X8}");
+                int dataDirOff = magic == 0x10B ? optionalHeaderOff + 96 : optionalHeaderOff + 112;
 
-            Console.WriteLine($"File Size: {peBytes.Length} bytes");
+                int clrEntryOff = dataDirOff + 14 * 8;
+                int clrRva = BitConverter.ToInt32(peBytes, clrEntryOff);
+                int clrSize = BitConverter.ToInt32(peBytes, clrEntryOff + 4);
+                Console.WriteLine($"CLR Data Directory: RVA=0x{clrRva:X8}, Size=0x{clrSize:X8}");
+                Console.WriteLine($"CLR Directory Present: {(clrRva != 0 && clrSize != 0)}");
+
+                int debugEntryOff = dataDirOff + 6 * 8;
+                int debugRva = BitConverter.ToInt32(peBytes, debugEntryOff);
+                int debugSize = BitConverter.ToInt32(peBytes, debugEntryOff + 4);
+                Console.WriteLine($"Debug Directory: RVA=0x{debugRva:X8}, Size=0x{debugSize:X8}");
+
+                Console.WriteLine($"File Size: {peBytes.Length} bytes");
+            });
         }
     }
 }

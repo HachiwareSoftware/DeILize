@@ -9,6 +9,8 @@ namespace DeILize.Models
         public bool IncludeGacAssemblies { get; set; } = true;
         public bool IncludeFrameworkAssemblies { get; set; } = true;
         public bool PatchEmbeddedFodyResources { get; set; } = true;
+        public bool PatchByteArrayAssemblies { get; set; } = true;
         public AssemblyRenameConfig HarmonyRename { get; set; } = null;
+        public bool SuppressEtwEvents { get; set; } = false;
     }
 }
