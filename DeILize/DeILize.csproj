@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>c39f7612-1b36-4887-81c1-55881fa17203</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>DeILize</RootNamespace>
+    <AssemblyName>DeILize</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Lib.Harmony">
+      <Version>2.3.5</Version>
+    </PackageReference>
+    <PackageReference Include="Mono.Cecil">
+      <Version>0.11.6</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(NuGetPackageRoot)lib.harmony\2.3.5\lib\net48\0Harmony.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(NuGetPackageRoot)mono.cecil\0.11.6\lib\net40\Mono.Cecil.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Runtime\PeHeaderPatcher.cs" />
+    <Compile Include="Runtime\AssemblyRuntimePatcher.cs" />
+    <Compile Include="Runtime\LdrModuleHider.cs" />
+    <Compile Include="Runtime\HarmonyAssemblyLoadHooks.cs" />
+    <Compile Include="FilePatch\FileAssemblyPatcher.cs" />
+    <Compile Include="FilePatch\EmbeddedResourcePatcher.cs" />
+    <Compile Include="FilePatch\AssemblyIdentityRewriter.cs" />
+    <Compile Include="Models\RuntimePatchOptions.cs" />
+    <Compile Include="Models\FilePatchOptions.cs" />
+    <Compile Include="Models\AssemblyRenameConfig.cs" />
+    <Compile Include="Models\RuntimePatchResult.cs" />
+    <Compile Include="Native\NativeMethods.cs" />
+    <Compile Include="DeILizeRuntime.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>

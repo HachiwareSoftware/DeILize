@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>DeILize.Tests</RootNamespace>
+    <AssemblyName>DeILize.Tests</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit">
+      <Version>4.2.2</Version>
+    </PackageReference>
+    <PackageReference Include="NUnit3TestAdapter">
+      <Version>4.6.0</Version>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk">
+      <Version>17.12.0</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\DeILize\DeILize.csproj">
+      <Project>{c39f7612-1b36-4887-81c1-55881fa17203}</Project>
+      <Name>DeILize</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(NuGetPackageRoot)lib.harmony\2.3.5\lib\net48\0Harmony.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(NuGetPackageRoot)mono.cecil\0.11.6\lib\net40\Mono.Cecil.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="nunit.framework">
+      <HintPath>$(NuGetPackageRoot)nunit\4.2.2\lib\net462\nunit.framework.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>$(NuGetPackageRoot)system.buffers\4.5.1\lib\net461\System.Buffers.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>$(NuGetPackageRoot)system.memory\4.5.5\lib\net461\System.Memory.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="PeHeaderPatcherTests.cs" />
+    <Compile Include="AssemblyIdentityRewriterTests.cs" />
+    <Compile Include="EmbeddedResourcePatcherTests.cs" />
+    <Compile Include="RuntimePatchIntegrationTests.cs" />
+    <Compile Include="FilePatchTests.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
